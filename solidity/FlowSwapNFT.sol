@@ -11,9 +11,16 @@ contract FlowSwapNFT is ERC721, ERC721URIStorage, Ownable {
 
     Counters.Counter private _tokenIdCounter;
 
-    constructor() ERC721("FSNT", "MTK") {}
+    constructor() ERC721("FSNT", "MTK") {
+        investmentTypeMap["RealEstate"] = InvestmentType.RealEstate;
+        investmentTypeMap["CollectibleCars"] = InvestmentType.CollectibleCars;
+        investmentTypeMap["Currency"] = InvestmentType.Currency;
+        investmentTypeMap["Stock"] = InvestmentType.Stock;
+        investmentTypeMap["Other"] = InvestmentType.Other;
+    }
 
-      struct AssetStruct {
+    struct AssetStruct {
+        uint256 assetNft;
         uint256 assetValue;
         uint256 assetNumberShares;
         uint256 assetIncome;
@@ -21,12 +28,24 @@ contract FlowSwapNFT is ERC721, ERC721URIStorage, Ownable {
         uint256 assetRiskRating;
         string currency;
         uint256 assetNumberSharesSold;
+        InvestmentType investmentType;
     }
 
+    mapping(address => bool) public walletExists;
+
+        // Mapping of bytes32 to AssetStruct
     mapping(bytes32 => AssetStruct) public assets;
 
+    address[] public wallets;
+
+    // Mapping of address to bytes32
+    mapping(address => bytes32[]) public assetsByOwner;
+
+    enum InvestmentType { RealEstate, CollectibleCars, Currency, Stock, Other }
+
+    mapping(string => InvestmentType) investmentTypeMap;
+
     function safeMint(
-        address to, 
         string memory uri,
         bytes32 _ipfsAddr,
         uint256 _assetValue,
@@ -35,26 +54,60 @@ contract FlowSwapNFT is ERC721, ERC721URIStorage, Ownable {
         uint256 _assetYield,
         uint256 _assetRiskRating,
         string memory _currency,
-        uint256 _assetNumberSharesSold
+        uint256 _assetNumberSharesSold,
+        string memory _investmentTypeStr
     )
      public  {
+        require(
+            investmentTypeMap[_investmentTypeStr] != InvestmentType(0),
+            "Invalid investment type"
+        );
+
+
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
-        _safeMint(to, tokenId);
+        _safeMint(msg.sender, tokenId);
         _setTokenURI(tokenId, uri);
-         assets[_ipfsAddr] = AssetStruct({
+ 
+        InvestmentType investmentType = investmentTypeMap[_investmentTypeStr];
+
+        AssetStruct memory newAsset = AssetStruct({
+            assetNft: tokenId,
             assetValue: _assetValue,
             assetNumberShares: _assetNumberShares,
             assetIncome: _assetIncome,
             assetYield: _assetYield,
             assetRiskRating: _assetRiskRating,
             currency: _currency,
-            assetNumberSharesSold: _assetNumberSharesSold
+            assetNumberSharesSold: _assetNumberSharesSold,
+            investmentType: investmentType
+
         });
+
+        // Store the new asset in the assets mapping
+        assets[_ipfsAddr] = newAsset;
+
+        // Store the IPFS address in the assetIdsByOwner mapping
+        assetsByOwner[msg.sender].push(_ipfsAddr);
+
+        if (!walletExists[msg.sender]) {
+            wallets.push(msg.sender);
+            walletExists[msg.sender] = true;
+        }
+ 
     }
 
+
+ 
+
+
+
+function getAssetsByOwner(address owner) public view returns (bytes32[] memory) {
+    return assetsByOwner[owner];
+}
     
     function getAsset(bytes32 _ipfsAddr) public view   returns (
+        uint256 assetNft,
         uint256 assetValue,
         uint256 assetNumberShares,
         uint256 assetIncome,
@@ -65,6 +118,7 @@ contract FlowSwapNFT is ERC721, ERC721URIStorage, Ownable {
     ) {
         AssetStruct storage asset = assets[_ipfsAddr];
         return (
+            asset.assetNft,
             asset.assetValue,
             asset.assetNumberShares,
             asset.assetIncome,
@@ -75,16 +129,8 @@ contract FlowSwapNFT is ERC721, ERC721URIStorage, Ownable {
         );
     }
 
-    function getNumberSharesSold(bytes32 _ipfsAddr) public view   returns (uint256) {
-        return assets[_ipfsAddr].assetNumberSharesSold;
-    }
-
-    function updateNumberSharesSold(bytes32 _ipfsAddr, uint256 _assetNumberSharesSold) public   {
-        require(assets[_ipfsAddr].assetValue > 0, "Asset does not exist");
-
-        assets[_ipfsAddr].assetNumberSharesSold = _assetNumberSharesSold;
-    }
-
+ 
+ 
     // The following functions are overrides required by Solidity.
 
     function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {
