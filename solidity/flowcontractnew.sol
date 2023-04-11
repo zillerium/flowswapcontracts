@@ -69,6 +69,10 @@ contract FlowSwapNFT is ERC721, ERC721URIStorage, Ownable {
             "Invalid investment type"
         );
 
+        require(
+            assets[_ipfsAddr].assetNft == 0,
+            "Asset with this IPFS address already exists"
+        );
 
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
